@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0-rc.1](https://github.com/jbr/trillium-frontend/compare/trillium-frontend-macros-v0.2.0...trillium-frontend-macros-v0.3.0-rc.1) - 2026-04-08
+
+### Other
+
+- release
+
 ## [0.2.0](https://github.com/jbr/trillium-frontend/compare/trillium-frontend-macros-v0.1.0...trillium-frontend-macros-v0.2.0) - 2026-02-28
 
 ### Added

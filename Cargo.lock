@@ -1420,7 +1420,7 @@ dependencies = [
 
 [[package]]
 name = "trillium-frontend"
-version = "0.2.0"
+version = "0.3.0-rc.1"
 dependencies = [
  "env_logger",
  "fieldwork 0.4.8",
@@ -1437,7 +1437,7 @@ dependencies = [
 
 [[package]]
 name = "trillium-frontend-macros"
-version = "0.2.0"
+version = "0.3.0-rc.1"
 dependencies = [
  "proc-macro2",
  "quote",
