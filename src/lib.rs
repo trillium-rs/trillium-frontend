@@ -138,7 +138,7 @@
 
 use fieldwork::Fieldwork;
 use std::borrow::Cow;
-use trillium::{Conn, Handler, Info, async_trait};
+use trillium::{Conn, Handler, Info};
 use trillium_client::Client;
 use trillium_static_compiled::StaticCompiledHandler;
 
@@ -220,7 +220,6 @@ impl FrontendHandler {
     }
 }
 
-#[async_trait]
 impl Handler for FrontendHandler {
     async fn run(&self, conn: Conn) -> Conn {
         if let Some(assets) = self.assets {
@@ -251,11 +250,9 @@ impl Handler for FrontendHandler {
 
         #[cfg(feature = "dev-proxy")]
         {
-            let client = self
-                .client
-                .take()
-                .expect("trillium-frontend: in dev-proxy mode, provide a Client via .with_client()")
-                .with_default_pool();
+            let client = self.client.take().expect(
+                "trillium-frontend: in dev-proxy mode, provide a Client via .with_client()",
+            );
 
             let port = self.dev_port.unwrap_or_else(|| {
                 portpicker::pick_unused_port()
