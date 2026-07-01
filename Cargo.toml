@@ -5,7 +5,7 @@ resolver = "2"
 
 [package]
 name = "trillium-frontend"
-version = "0.3.0-rc.1"
+version = "0.3.0"
 edition = "2024"
 description = "Trillium handler for JS/TS frontend projects: proxies a dev server in debug mode, embeds compiled assets in release mode"
 license = "MIT OR Apache-2.0"
@@ -23,7 +23,7 @@ dev-proxy = [
 
 [dependencies]
 trillium = "1.3.0"
-trillium-frontend-macros = { path = "macros", version = "0.3.0-rc.1" }
+trillium-frontend-macros = { path = "macros", version = "0.3.0" }
 fieldwork = "0.5"
 log = "0.4"
 trillium-static-compiled = "0.7.0"

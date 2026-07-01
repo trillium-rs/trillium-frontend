@@ -1,6 +1,6 @@
 [package]
 name = "trillium-frontend-macros"
-version = "0.3.0-rc.1"
+version = "0.3.0"
 edition = "2024"
 description = "Internal proc-macro crate for trillium-frontend"
 license = "MIT OR Apache-2.0"
