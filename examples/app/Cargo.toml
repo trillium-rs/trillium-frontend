@@ -1,0 +1,22 @@
+[package]
+name = "trillium-frontend-example"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[features]
+# Forward the dev-proxy feature so `cargo run -p trillium-frontend-example --features dev-proxy`
+# runs against a live Vite dev server instead of embedding a compile-time build.
+dev-proxy = ["trillium-frontend/dev-proxy"]
+
+[dependencies]
+trillium-frontend = { path = "../.." }
+trillium-smol = "0.7.0"
+trillium-client = "0.9.7"
+trillium-logger = "0.5.4"
+env_logger = "0.11"
+
+# Demonstrates the optional stable-Rust source-tracking shim. Not needed on nightly (the
+# macro tracks sources itself); harmless to leave in place across toolchains.
+[build-dependencies]
+trillium-frontend = { path = "../.." }

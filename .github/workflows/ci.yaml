@@ -30,6 +30,14 @@ jobs:
       env:
         RUST_LOG: trace
 
+    # Slow, toolchain-specific source-tracking tests (see tests/source_tracking.rs).
+    # #[ignore]d, so the step above skips them; run them explicitly here. Each scenario
+    # self-skips when its toolchain isn't installed, so the stable/nightly matrix covers
+    # both the build.rs shim and the native proc_macro_tracked_path path. Serial by design:
+    # the builds are CPU-bound (parallelism buys little) and it keeps memory and logs sane.
+    - name: Source-tracking integration tests
+      run: cargo test --test source_tracking -- --ignored --test-threads=1
+
   check_fmt_and_docs:
     name: Checking fmt, clippy, and docs
     runs-on: ubuntu-latest

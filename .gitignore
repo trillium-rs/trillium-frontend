@@ -1,4 +1,4 @@
 /target
 .vite
-/examples/client/dist
-/examples/client/bun.lock
+/examples/app/client/dist
+/examples/app/client/bun.lock

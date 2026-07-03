@@ -3,8 +3,8 @@
 [![ci][ci-badge]][ci]
 [![crates.io version badge][version-badge]][crate]
 
-[ci]: https://github.com/jbr/trillium-frontend/actions?query=workflow%3ACI
-[ci-badge]: https://github.com/jbr/trillium-frontend/workflows/CI/badge.svg
+[ci]: https://github.com/trillium-rs/trillium-frontend/actions?query=workflow%3ACI
+[ci-badge]: https://github.com/trillium-rs/trillium-frontend/workflows/CI/badge.svg
 [version-badge]: https://img.shields.io/crates/v/trillium-frontend.svg?style=flat-square
 [crate]: https://crates.io/crates/trillium-frontend
 
@@ -123,6 +123,30 @@ The full dev command is assembled as `{run_prefix} {framework_command} --port {p
 | `.with_index_file("index.html")` | Enable SPA fallback: serve this file for any unmatched path. |
 | `.with_dev_command("npm run dev -- --port $PORT")` | Override the auto-detected dev command. When set, you are responsible for port handling — `$PORT` is exported as an env var. Only used in dev-proxy mode. |
 | `.with_dev_port(3000)` | Pin the dev server to a specific port instead of picking a free one automatically. Only used in dev-proxy mode. |
+
+## Rebuilding when frontend sources change
+
+In **build mode**, the frontend build runs at compile time, so cargo needs to know that your JS/TS sources are inputs to the compile — otherwise editing *only* a frontend file and re-running `cargo build` can leave the previously embedded assets in place.
+
+- **Dev-proxy mode:** not a concern. A live dev server serves your sources with HMR, so nothing is embedded.
+- **Build mode on nightly:** handled automatically. The macro registers your source files as compile dependencies (via the unstable [`proc_macro_tracked_path`](https://github.com/rust-lang/rust/issues/99515) feature, detected at build time — nothing to embed, no setup). Edit a source file, `cargo build`, and the frontend rebuilds.
+- **Build mode on stable:** proc macros have no stable way to declare file dependencies, so a frontend-only edit may be missed until something else triggers a recompile (editing Rust code, `cargo clean`, etc.).
+
+If you build or develop on stable and want frontend-only edits to reliably trigger a rebuild — or just want belt-and-suspenders insurance that you'll never ship stale assets, on any toolchain — add a one-line `build.rs`. It's optional, not essential:
+
+```rust
+// build.rs
+fn main() {
+    trillium_frontend::build::track_frontend_sources();
+}
+```
+
+```toml
+[build-dependencies]
+trillium-frontend = "0.3"
+```
+
+The macro leaves a manifest of your source paths in `OUT_DIR`; this helper reads it and emits `cargo:rerun-if-changed` for each. It's safe to leave in place across toolchains: on nightly it runs alongside the macro's own tracking, declaring the same dependencies a second way. (That redundancy is deliberate — emitting explicit `rerun-if-changed` paths also keeps the build script from falling back to cargo's whole-package change detection, which can otherwise rebuild on every `cargo build`.) This shim exists only until `proc_macro_tracked_path` stabilizes. See the [`build` module docs](https://docs.rs/trillium-frontend/latest/trillium_frontend/build/) for caveats (notably: it reflects the *previous* build's file list, and the frontend project should live inside your crate directory).
 
 ## Publishing for `cargo install`
 

@@ -108,6 +108,18 @@
 //! | `webpack.config.{js,ts,mjs}` | Webpack | `webpack serve` | `webpack build` | `dist` |
 //! | `next.config.{js,ts,mjs}` | Next.js | `next dev` | `next build` | `.next` |
 //!
+//! # Rebuilding when frontend sources change
+//!
+//! In build mode the frontend build runs at compile time, so cargo must treat your JS/TS
+//! sources as compile inputs — otherwise editing *only* a frontend file and re-running
+//! `cargo build` can leave the previously embedded assets in place. On **nightly** this is
+//! handled automatically (the macro registers source files via the unstable
+//! `proc_macro_tracked_path` feature, detected at build time — nothing embedded, no setup).
+//! On **stable**, proc macros can't declare file dependencies, so a frontend-only edit may
+//! be missed until another recompile is triggered. If you develop or build on stable, or
+//! want belt-and-suspenders insurance on any toolchain, add the optional [`build`]-script
+//! shim — it is not essential. Dev-proxy mode needs none of this (HMR handles it).
+//!
 //! # Publishing for `cargo install`
 //!
 //! To support `cargo install` without requiring JS tooling on the user's machine:
@@ -135,6 +147,8 @@
 //! ```
 
 #![forbid(unsafe_code)]
+
+pub mod build;
 
 use fieldwork::Fieldwork;
 use std::borrow::Cow;

@@ -1,15 +1,15 @@
 [workspace]
-members = [".", "macros"]
+members = [".", "macros", "examples/app"]
 resolver = "2"
 
 
 [package]
 name = "trillium-frontend"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 description = "Trillium handler for JS/TS frontend projects: proxies a dev server in debug mode, embeds compiled assets in release mode"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/jbr/trillium-frontend"
+repository = "https://github.com/trillium-rs/trillium-frontend"
 readme = "README.md"
 keywords = ["trillium", "frontend", "vite", "spa", "proxy"]
 categories = ["web-programming::http-server", "web-programming"]
@@ -23,15 +23,10 @@ dev-proxy = [
 
 [dependencies]
 trillium = "1.3.0"
-trillium-frontend-macros = { path = "macros", version = "0.3.0" }
+trillium-frontend-macros = { path = "macros", version = "0.4" }
 fieldwork = "0.5"
 log = "0.4"
-trillium-static-compiled = "0.7.0"
-trillium-client = "0.9.7"
-trillium-proxy = { version = "0.8.1", optional = true }
+trillium-static-compiled = "0.7"
+trillium-client = "0.9"
+trillium-proxy = { version = "0.8", optional = true }
 portpicker = { version = "0.1", optional = true }
-
-[dev-dependencies]
-env_logger = "0.11"
-trillium-smol = "0.7.0"
-trillium-logger = "0.5.4"
