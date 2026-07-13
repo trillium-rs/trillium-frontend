@@ -152,7 +152,7 @@ pub mod build;
 
 use fieldwork::Fieldwork;
 use std::borrow::Cow;
-use trillium::{Conn, Handler, Info};
+use trillium::{Conn, Handler, Info, Method};
 use trillium_client::Client;
 use trillium_static_compiled::StaticCompiledHandler;
 
@@ -164,7 +164,7 @@ use std::{
     time::Duration,
 };
 #[cfg(feature = "dev-proxy")]
-use trillium::{Error, Method, Upgrade};
+use trillium::{Error, KnownHeaderName, Upgrade};
 #[cfg(feature = "dev-proxy")]
 use trillium_proxy::{Proxy, Url};
 
@@ -202,6 +202,11 @@ pub struct FrontendHandler {
     #[field]
     index_file: Option<&'static str>,
 
+    /// opt-in predicate gating the SPA fallback: the index is served only for
+    /// requests it accepts (ignored without a `spa_fallback`)
+    #[field(into = false)]
+    index_predicate: Option<fn(&Conn) -> bool>,
+
     #[cfg(feature = "dev-proxy")]
     dev_process: Option<Mutex<Child>>,
 
@@ -226,11 +231,27 @@ impl FrontendHandler {
             dev_command: None,
             dev_port: None,
             index_file: None,
+            index_predicate: None,
             #[cfg(feature = "dev-proxy")]
             dev_process: None,
             #[cfg(feature = "dev-proxy")]
             proxy: None,
         }
+    }
+}
+
+impl FrontendHandler {
+    /// Whether the SPA index should stand in for a request no asset matched.
+    ///
+    /// Only a navigation can be answered with the index, so non-`GET`/`HEAD`
+    /// requests are excluded regardless of any predicate: a `POST` to an
+    /// arbitrary path is not a client-side route, and answering it `200` with
+    /// the index misrepresents it as one. Beyond that, an
+    /// [`index_predicate`](Self::with_index_predicate) may narrow the fallback
+    /// to the paths the app actually routes, so that everything else 404s.
+    fn serves_index(&self, conn: &Conn) -> bool {
+        matches!(conn.method(), Method::Get | Method::Head)
+            && self.index_predicate.is_none_or(|predicate| predicate(conn))
     }
 }
 
@@ -240,6 +261,7 @@ impl Handler for FrontendHandler {
             let conn = assets.run(conn).await;
             if !conn.is_halted()
                 && let Some(spa) = self.spa_fallback.as_ref()
+                && self.serves_index(&conn)
             {
                 return spa.run(conn).await;
             }
@@ -255,11 +277,10 @@ impl Handler for FrontendHandler {
     }
 
     async fn init(&mut self, #[allow(unused)] info: &mut Info) {
-        if self.assets.is_some() {
-            if let Some(index) = self.index_file {
-                self.assets = self.assets.map(|h| h.with_index_file(index));
-            }
-            return;
+        if self.assets.is_some()
+            && let Some(index) = self.index_file
+        {
+            self.assets = self.assets.map(|h| h.with_index_file(index));
         }
 
         #[cfg(feature = "dev-proxy")]
