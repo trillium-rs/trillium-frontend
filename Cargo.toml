@@ -5,7 +5,7 @@ resolver = "2"
 
 [package]
 name = "trillium-frontend"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2024"
 description = "Trillium handler for JS/TS frontend projects: proxies a dev server in debug mode, embeds compiled assets in release mode"
 license = "MIT OR Apache-2.0"
