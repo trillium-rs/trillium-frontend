@@ -8,6 +8,12 @@
 //!    freshly built assets are the ones embedded in the binary.
 //! 2. **No over-build:** a `cargo build` with no changes does *not* re-run the
 //!    frontend build.
+//! 3. **Build once:** compilation units expanding one `frontend!` concurrently
+//!    produce exactly one frontend build, never a pile-up racing over one `dist`.
+//!
+//! The three interact, which is why they live together: the skip that keeps (3) from
+//! double-building is the same skip that could, done wrong, embed stale assets and
+//! break (1).
 //!
 //! They do **not** assert *how* that happens. The same assertions run under both
 //! stable and nightly; each toolchain exercises a different mechanism underneath
@@ -137,13 +143,36 @@ impl Fixture {
     }
 
     fn build(&self) -> Output {
+        self.cargo_build(&[])
+    }
+
+    /// `cargo build --all-targets`, which compiles the bin *and* its test target —
+    /// two compilation units cargo runs concurrently, each expanding the same
+    /// `frontend!` in its own proc-macro process.
+    fn build_all_targets(&self) -> Output {
+        self.cargo_build(&["--all-targets"])
+    }
+
+    fn cargo_build(&self, extra: &[&str]) -> Output {
         Command::new("cargo")
             .arg(format!("+{}", self.toolchain))
             .arg("build")
+            .args(extra)
             .current_dir(&self.dir)
             .env("CARGO_TARGET_DIR", self.target_dir())
             .output()
             .expect("failed to spawn cargo")
+    }
+
+    /// How many times the fixture's frontend build command has run.
+    ///
+    /// The counter lives under `node_modules`, which the macro excludes from source
+    /// tracking — so incrementing it cannot itself invalidate the build and skew the
+    /// number it reports.
+    fn build_count(&self) -> usize {
+        fs::read_to_string(self.client().join("node_modules/build_count"))
+            .map(|counter| counter.lines().count())
+            .unwrap_or(0)
     }
 
     fn binary(&self) -> PathBuf {
@@ -201,12 +230,16 @@ fn cargo_toml(pkg: &str, with_build_rs: bool) -> String {
 
 /// Constructs the handler (which forces the compile-time build + embed) and
 /// `black_box`es it so the embedded assets can't be optimized out of the binary.
+///
+/// The build appends to a counter under `node_modules` (untracked, so counting cannot
+/// perturb what it measures) — that's how [`Fixture::build_count`] observes how many
+/// times the frontend actually built.
 const MAIN_RS: &str = r#"use trillium_frontend::frontend;
 
 fn main() {
     std::hint::black_box(frontend!(
         path = "./client",
-        build = "mkdir -p dist && cp src/content.txt dist/index.html",
+        build = "mkdir -p dist && cp src/content.txt dist/index.html && echo ran >> node_modules/build_count",
         dist = "dist"
     ));
 }
@@ -296,4 +329,37 @@ fn stable_shim_tracking() {
 #[ignore = "runs a real cargo build; needs the nightly toolchain"]
 fn nightly_with_shim_present() {
     run_scenario("nightly", /* with_build_rs = */ true);
+}
+
+/// Property 3 — build once: several compilation units expanding one `frontend!`
+/// concurrently must produce exactly one frontend build.
+///
+/// `cargo build --all-targets` compiles the bin and its test target in parallel, each
+/// expanding the macro in a separate process. Unserialized, both build: they race to
+/// write one `dist` while the other's `static_compiled!` reads it, which fails the
+/// build outright with a bare `No such file or directory (os error 2)`.
+///
+/// Counting builds rather than trying to catch that crash is deliberate. The crash
+/// needs unlucky timing and reproduces only sometimes; "how many times did the build
+/// run" is the underlying property, and it is exactly deterministic.
+#[test]
+#[ignore = "runs a real cargo build; needs the nightly toolchain"]
+fn concurrent_expansion_builds_once() {
+    if !toolchain_available("nightly") {
+        eprintln!("SKIP: `nightly` toolchain not installed");
+        return;
+    }
+
+    let fx = Fixture::scaffold("concurrent", /* with_build_rs = */ false, "nightly");
+    fx.set_content("TF_TOKEN_concurrent");
+    assert_build_ok(&fx.build_all_targets(), "concurrent --all-targets build");
+
+    assert_eq!(
+        fx.build_count(),
+        1,
+        "one `frontend!` expanded concurrently ran the frontend build {} times; \
+         concurrent expansions must be serialized and redundant builds skipped, or \
+         they clobber each other's dist",
+        fx.build_count()
+    );
 }

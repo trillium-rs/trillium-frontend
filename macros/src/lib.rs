@@ -3,7 +3,11 @@
 #![forbid(unsafe_code)]
 use proc_macro::{TokenStream, TokenTree};
 use quote::quote;
-use std::path::{Path, PathBuf};
+use std::{
+    fs::{File, OpenOptions},
+    hash::{DefaultHasher, Hash, Hasher},
+    path::{Path, PathBuf},
+};
 
 /// Internal proc macro invoked by the `frontend!` macro_rules wrapper.
 /// Do not call directly; use `trillium_frontend::frontend!` instead.
@@ -27,6 +31,11 @@ pub fn frontend_impl(input: TokenStream) -> TokenStream {
     }
 
     let detection = detect(&project_path);
+
+    // Held for the rest of expansion; see `acquire_project_lock` for why the
+    // project directory must not be touched by two expansions at once.
+    let _lock = acquire_project_lock(&project_path);
+
     install_if_needed(&project_path, &detection);
 
     if is_dev_proxy {
@@ -53,23 +62,14 @@ pub fn frontend_impl(input: TokenStream) -> TokenStream {
             .expect("trillium-frontend: could not detect a build command; specify build = \"...\" in the macro")
             .to_string();
 
-        let status = std::process::Command::new("sh")
-            .arg("-c")
-            .arg(&build_command)
-            .current_dir(&project_path)
-            .status()
-            .unwrap_or_else(|e| panic!("trillium-frontend: failed to run build `{build_command}`: {e}"));
-
-        if !status.success() {
-            panic!("trillium-frontend: build command `{build_command}` failed with {status}");
-        }
-
         let dist_dir = project_path.join(
             args.dist
                 .as_deref()
                 .or(detection.dist.as_deref())
                 .unwrap_or("dist"),
         );
+
+        build_if_stale(&project_path, &dist_dir, &build_command);
 
         // Register the source tree as a compile dependency so edits trigger a rebuild.
         track_sources(&project_path, &dist_dir);
@@ -139,6 +139,138 @@ fn emit_prebuilt(
             None,
         )
     }
+}
+
+// ── Concurrent expansion ──────────────────────────────────────────────────────
+
+/// Acquire the advisory lock serializing expansions that touch this frontend
+/// project. The lock is released when the returned file is dropped.
+///
+/// One `frontend!` call is routinely expanded by several compilation units at once,
+/// each in its own proc-macro process: `cargo clippy --all-targets`, for instance,
+/// builds a crate's bin and its test target concurrently. Unserialized, they race in
+/// two places — two package-manager installs writing one `node_modules`, and, worse,
+/// one unit's build emptying `dist` while another unit's `static_compiled!` reads it,
+/// which fails the build with a bare `No such file or directory (os error 2)`.
+///
+/// The lock is released when this macro returns, which is *before* `static_compiled!`
+/// (expanded in the caller) reads `dist`. That is only safe because a build that
+/// would be a no-op is skipped entirely: the unit that waited finds the stamp current,
+/// never writes `dist`, and both units embed from a directory nobody is mutating. The
+/// lock and the skip in [`build_if_stale`] are one mechanism — neither fixes the race
+/// alone.
+///
+/// Best-effort by design: if the lock file cannot be created or locked, expansion
+/// proceeds unserialized rather than failing the build.
+fn acquire_project_lock(project_path: &Path) -> Option<File> {
+    let path = state_dir(project_path)?.join("lock");
+    let file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(false)
+        .open(path)
+        .ok()?;
+    file.lock().ok()?;
+    Some(file)
+}
+
+/// The directory holding this project's build-coordination state: the lock and the
+/// freshness stamp.
+///
+/// It lives in the system temp directory, keyed by a hash of the project path, because
+/// both in-project alternatives are ruled out. The project root is walked by
+/// [`collect_paths`], so state kept there would be registered as a tracked source and
+/// every build would invalidate its own `rerun-if-changed` — the rebuild loop the
+/// `build` module docs warn about. And `node_modules` does not exist yet when the lock
+/// is first needed, since the lock must cover the install that creates it.
+///
+/// Losing this directory to a temp sweep costs one redundant rebuild and nothing else.
+fn state_dir(project_path: &Path) -> Option<PathBuf> {
+    let dir =
+        std::env::temp_dir().join(format!("trillium-frontend-{:016x}", hash_of(project_path)));
+    std::fs::create_dir_all(&dir).ok()?;
+    Some(dir)
+}
+
+/// Run the frontend build, unless `dist` already holds exactly what this build would
+/// produce.
+///
+/// Skipping no-op builds is what makes concurrent expansion safe (see
+/// [`acquire_project_lock`]), and it removes plain waste besides: without it, every
+/// `cargo clippy --all-targets` builds the frontend once per target and discards all
+/// but one result.
+///
+/// Freshness compares a fingerprint of the tracked sources, the build command, and the
+/// dist path against a stamp written after the last successful build. A failed build
+/// writes no stamp, so it is retried rather than skipped.
+///
+/// This assumes the build does not modify its own sources — it writes `dist`, which
+/// [`collect_paths`] excludes. A build command that rewrote files under the project
+/// root would move the fingerprint every time and rebuild unconditionally, which is
+/// correct, just not fast.
+fn build_if_stale(project_path: &Path, dist_dir: &Path, build_command: &str) {
+    let fingerprint = fingerprint(project_path, dist_dir, build_command);
+    let stamp = state_dir(project_path).map(|dir| dir.join("stamp"));
+    let recorded = stamp
+        .as_deref()
+        .and_then(|p| std::fs::read_to_string(p).ok());
+
+    if dist_dir.is_dir() && recorded.as_deref() == Some(fingerprint.as_str()) {
+        return;
+    }
+
+    let status = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(build_command)
+        .current_dir(project_path)
+        .status()
+        .unwrap_or_else(|e| {
+            panic!("trillium-frontend: failed to run build `{build_command}`: {e}")
+        });
+
+    if !status.success() {
+        panic!("trillium-frontend: build command `{build_command}` failed with {status}");
+    }
+
+    if let Some(stamp) = stamp {
+        let _ = std::fs::write(stamp, &fingerprint);
+    }
+}
+
+/// Fingerprint the inputs of a frontend build: every tracked source path with its
+/// length and mtime, plus the build command and dist location.
+///
+/// Length-and-mtime is the same signal cargo uses for `rerun-if-changed`, so this is
+/// exactly as tolerant of coarse filesystem timestamps as the surrounding build is —
+/// no better, no worse. Directories are fingerprinted too (as [`collect_paths`]
+/// returns them), which is how added and removed entries are noticed.
+fn fingerprint(project_path: &Path, dist_dir: &Path, build_command: &str) -> String {
+    let mut paths = Vec::new();
+    collect_paths(project_path, dist_dir, &mut paths);
+    paths.sort();
+
+    let mut hasher = DefaultHasher::new();
+    build_command.hash(&mut hasher);
+    dist_dir.hash(&mut hasher);
+    for path in &paths {
+        path.hash(&mut hasher);
+        let Ok(metadata) = std::fs::metadata(path) else {
+            continue;
+        };
+        metadata.len().hash(&mut hasher);
+        if let Ok(modified) = metadata.modified()
+            && let Ok(age) = modified.duration_since(std::time::UNIX_EPOCH)
+        {
+            age.as_nanos().hash(&mut hasher);
+        }
+    }
+    format!("{:016x}", hasher.finish())
+}
+
+fn hash_of(value: impl Hash) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    value.hash(&mut hasher);
+    hasher.finish()
 }
 
 // ── Source tracking ───────────────────────────────────────────────────────────
@@ -212,10 +344,7 @@ fn collect_paths(dir: &Path, dist_dir: &Path, out: &mut Vec<PathBuf>) {
 /// Write the tracked-path manifest to `OUT_DIR`, keyed by a hash of the project path so
 /// multiple `frontend!` invocations in one crate don't collide.
 fn write_manifest(out_dir: &str, project_path: &Path, tracked: &[PathBuf]) {
-    use std::hash::{Hash, Hasher};
-    let mut hasher = std::hash::DefaultHasher::new();
-    project_path.hash(&mut hasher);
-    let file_name = format!("trillium-frontend-{:016x}.paths", hasher.finish());
+    let file_name = format!("trillium-frontend-{:016x}.paths", hash_of(project_path));
 
     let mut body = String::new();
     for path in tracked {
