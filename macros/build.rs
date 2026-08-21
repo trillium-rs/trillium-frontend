@@ -55,10 +55,9 @@ fn probe() -> bool {
         return false;
     };
     let probe_src = format!("{out_dir}/probe_tracked_path.rs");
-    let snippet = "#![feature(proc_macro_tracked_path)]\n\
-        extern crate proc_macro;\n\
-        #[allow(dead_code)]\n\
-        fn _probe<P: AsRef<std::path::Path>>(p: P) { proc_macro::tracked::path(p); }\n";
+    let snippet = "#![feature(proc_macro_tracked_path)]\nextern crate \
+                   proc_macro;\n#[allow(dead_code)]\nfn _probe<P: AsRef<std::path::Path>>(p: P) { \
+                   proc_macro::tracked::path(p); }\n";
     if fs::write(&probe_src, snippet).is_err() {
         return false;
     }

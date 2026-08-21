@@ -36,14 +36,13 @@
 //!
 //! ## Caveats
 //!
-//! - The manifest is written *during* compilation, which happens **after** build scripts
-//!   run, so this shim always reflects the *previous* build's file list. In steady state
-//!   that's fine; right after adding the shim — or after adding/removing source files that
-//!   nothing else references — you may need one extra `cargo build` for the list to catch
-//!   up.
-//! - The frontend project must live inside your crate directory (the usual `./client`
-//!   layout) for the very first build to notice later edits, since cargo's default
-//!   build-script watching only covers files within the package until the manifest exists.
+//! - The manifest is written *during* compilation, which happens **after** build scripts run, so
+//!   this shim always reflects the *previous* build's file list. In steady state that's fine; right
+//!   after adding the shim — or after adding/removing source files that nothing else references —
+//!   you may need one extra `cargo build` for the list to catch up.
+//! - The frontend project must live inside your crate directory (the usual `./client` layout) for
+//!   the very first build to notice later edits, since cargo's default build-script watching only
+//!   covers files within the package until the manifest exists.
 //!
 //! [`proc_macro_tracked_path`]: https://github.com/rust-lang/rust/issues/99515
 
@@ -110,9 +109,11 @@ mod tests {
             fs::create_dir_all(&dir).unwrap();
             FakeOutDir(dir)
         }
+
         fn write(&self, name: &str, contents: &str) {
             fs::write(self.0.join(name), contents).unwrap();
         }
+
         fn as_str(&self) -> &str {
             self.0.to_str().unwrap()
         }

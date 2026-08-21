@@ -152,10 +152,6 @@ pub mod build;
 
 use fieldwork::Fieldwork;
 use std::borrow::Cow;
-use trillium::{Conn, Handler, Info, Method};
-use trillium_client::Client;
-use trillium_static_compiled::StaticCompiledHandler;
-
 #[cfg(feature = "dev-proxy")]
 use std::{
     io::ErrorKind,
@@ -163,10 +159,13 @@ use std::{
     sync::Mutex,
     time::Duration,
 };
+use trillium::{Conn, Handler, Info, Method};
 #[cfg(feature = "dev-proxy")]
 use trillium::{Error, KnownHeaderName, Upgrade};
+use trillium_client::Client;
 #[cfg(feature = "dev-proxy")]
 use trillium_proxy::{Proxy, Url};
+use trillium_static_compiled::StaticCompiledHandler;
 
 #[derive(Fieldwork)]
 #[fieldwork(opt_in, with, into, option_set_some)]
@@ -298,7 +297,8 @@ impl Handler for FrontendHandler {
                 cmd.to_string()
             } else {
                 let detected = self.detected_dev_command.as_deref().expect(
-                    "trillium-frontend: no dev command detected; configure with .with_dev_command()",
+                    "trillium-frontend: no dev command detected; configure with \
+                     .with_dev_command()",
                 );
                 format!("{detected} --port {port}")
             };
@@ -356,8 +356,8 @@ async fn wait_for_port(upstream: &Url, client: &Client) {
             }
 
             Err(Error::Io(e)) if e.kind() == ErrorKind::ConnectionRefused => {
-                // note(jbr): this is bad and represents a flaw in the current Connector api in that there's no
-                // way to agnostically and asynchronously sleep
+                // note(jbr): this is bad and represents a flaw in the current Connector api in that
+                // there's no way to agnostically and asynchronously sleep
                 std::thread::sleep(Duration::from_millis(10));
                 log::debug!("Could not connect to {upstream} yet, sleeping 10ms");
             }

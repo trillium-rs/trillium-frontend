@@ -4,12 +4,11 @@
 //!
 //! They assert the *observable end consequence* the feature exists to guarantee:
 //!
-//! 1. **Anti-stale:** after editing a frontend source file and rebuilding, the
-//!    freshly built assets are the ones embedded in the binary.
-//! 2. **No over-build:** a `cargo build` with no changes does *not* re-run the
-//!    frontend build.
-//! 3. **Build once:** compilation units expanding one `frontend!` concurrently
-//!    produce exactly one frontend build, never a pile-up racing over one `dist`.
+//! 1. **Anti-stale:** after editing a frontend source file and rebuilding, the freshly built assets
+//!    are the ones embedded in the binary.
+//! 2. **No over-build:** a `cargo build` with no changes does *not* re-run the frontend build.
+//! 3. **Build once:** compilation units expanding one `frontend!` concurrently produce exactly one
+//!    frontend build, never a pile-up racing over one `dist`.
 //!
 //! The three interact, which is why they live together: the skip that keeps (3) from
 //! double-building is the same skip that could, done wrong, embed stale assets and
@@ -213,18 +212,10 @@ fn cargo_toml(pkg: &str, with_build_rs: bool) -> String {
         String::new()
     };
     format!(
-        "[package]\n\
-         name = \"{pkg}\"\n\
-         version = \"0.0.0\"\n\
-         edition = \"2024\"\n\
-         publish = false\n\
-         \n\
-         # Own workspace so cargo doesn't walk up the temp dir looking for one.\n\
-         [workspace]\n\
-         \n\
-         [dependencies]\n\
-         trillium-frontend = {{ path = \"{root}\" }}\n\
-         {build_deps}"
+        "[package]\nname = \"{pkg}\"\nversion = \"0.0.0\"\nedition = \"2024\"\npublish = \
+         false\n\n# Own workspace so cargo doesn't walk up the temp dir looking for \
+         one.\n[workspace]\n\n[dependencies]\ntrillium-frontend = {{ path = \"{root}\" \
+         }}\n{build_deps}"
     )
 }
 
@@ -357,9 +348,9 @@ fn concurrent_expansion_builds_once() {
     assert_eq!(
         fx.build_count(),
         1,
-        "one `frontend!` expanded concurrently ran the frontend build {} times; \
-         concurrent expansions must be serialized and redundant builds skipped, or \
-         they clobber each other's dist",
+        "one `frontend!` expanded concurrently ran the frontend build {} times; concurrent \
+         expansions must be serialized and redundant builds skipped, or they clobber each other's \
+         dist",
         fx.build_count()
     );
 }
