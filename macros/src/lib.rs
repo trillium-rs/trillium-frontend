@@ -59,7 +59,10 @@ pub fn frontend_impl(input: TokenStream) -> TokenStream {
             .build
             .as_deref()
             .or(detected_build.as_deref())
-            .expect("trillium-frontend: could not detect a build command; specify build = \"...\" in the macro")
+            .expect(
+                "trillium-frontend: could not detect a build command; specify build = \"...\" in \
+                 the macro",
+            )
             .to_string();
 
         let dist_dir = project_path.join(
@@ -74,9 +77,7 @@ pub fn frontend_impl(input: TokenStream) -> TokenStream {
         // Register the source tree as a compile dependency so edits trigger a rebuild.
         track_sources(&project_path, &dist_dir);
 
-        let dist_str = dist_dir
-            .to_str()
-            .expect("dist path is not valid UTF-8");
+        let dist_str = dist_dir.to_str().expect("dist path is not valid UTF-8");
 
         let index_html = dist_dir.join("index.html");
         let spa_fallback_tokens = if index_html.exists() {
@@ -111,8 +112,9 @@ fn emit_prebuilt(
 
     if !dist_dir.exists() {
         panic!(
-            "trillium-frontend: no source (package.json) and no pre-built dist directory found at `{}`. \
-             Either include the dist directory in your published crate or ensure the frontend source is available.",
+            "trillium-frontend: no source (package.json) and no pre-built dist directory found at \
+             `{}`. Either include the dist directory in your published crate or ensure the \
+             frontend source is available.",
             dist_dir.display()
         );
     }
@@ -278,15 +280,15 @@ fn hash_of(value: impl Hash) -> u64 {
 /// Register the frontend source tree as a compile-time dependency so cargo re-runs the
 /// build when a source file is added, removed, or modified.
 ///
-/// - On nightly, calls [`proc_macro::tracked::path`] directly (no downstream build.rs, no
-///   sources embedded in the binary). Enabled by build.rs's channel + API probe.
-/// - Always, if `OUT_DIR` is set (i.e. the downstream crate has a build script), writes a
-///   manifest of tracked paths into `OUT_DIR` for the build-script shim
-///   (`trillium_frontend::build::track_frontend_sources`) to emit as `rerun-if-changed`.
-///   The proc macro and that build script share the same `OUT_DIR`. The shim emits those
-///   paths on every toolchain — even nightly, where native tracking is also active — so the
-///   build script never falls back to cargo's package-mtime change detection (which can
-///   loop; see the `build` module docs).
+/// - On nightly, calls [`proc_macro::tracked::path`] directly (no downstream build.rs, no sources
+///   embedded in the binary). Enabled by build.rs's channel + API probe.
+/// - Always, if `OUT_DIR` is set (i.e. the downstream crate has a build script), writes a manifest
+///   of tracked paths into `OUT_DIR` for the build-script shim
+///   (`trillium_frontend::build::track_frontend_sources`) to emit as `rerun-if-changed`. The proc
+///   macro and that build script share the same `OUT_DIR`. The shim emits those paths on every
+///   toolchain — even nightly, where native tracking is also active — so the build script never
+///   falls back to cargo's package-mtime change detection (which can loop; see the `build` module
+///   docs).
 fn track_sources(project_path: &Path, dist_dir: &Path) {
     let mut tracked = Vec::new();
     collect_paths(project_path, dist_dir, &mut tracked);
