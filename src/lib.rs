@@ -159,12 +159,12 @@ use std::{
     sync::Mutex,
     time::Duration,
 };
-use trillium::{Conn, Handler, Info, Method};
 #[cfg(feature = "dev-proxy")]
-use trillium::{Error, KnownHeaderName, Upgrade};
+use trillium::Upgrade;
+use trillium::{Conn, Handler, Info, Method};
 use trillium_client::Client;
 #[cfg(feature = "dev-proxy")]
-use trillium_proxy::{Proxy, Url};
+use trillium_proxy::{Connector, Proxy, Url};
 use trillium_static_compiled::StaticCompiledHandler;
 
 #[derive(Fieldwork)]
@@ -348,18 +348,20 @@ impl Drop for FrontendHandler {
 #[cfg(feature = "dev-proxy")]
 async fn wait_for_port(upstream: &Url, client: &Client) {
     for _ in 0..100 {
-        match client.build_conn(Method::Head, upstream.clone()).await {
+        log::trace!("testing connection");
+        match client.connector().connect(upstream).await {
             Ok(_) => {
-                log::debug!("Successfully connected to {upstream}");
-                // we don't care what the response was as long as it was valid http
+                log::trace!("tcp connected");
                 return;
             }
 
-            Err(Error::Io(e)) if e.kind() == ErrorKind::ConnectionRefused => {
-                // note(jbr): this is bad and represents a flaw in the current Connector api in that
-                // there's no way to agnostically and asynchronously sleep
-                std::thread::sleep(Duration::from_millis(10));
-                log::debug!("Could not connect to {upstream} yet, sleeping 10ms");
+            Err(e) if e.kind() == ErrorKind::ConnectionRefused => {
+                log::trace!("Could not connect to {upstream} yet, sleeping 10ms");
+                client
+                    .connector()
+                    .runtime()
+                    .delay(Duration::from_millis(10))
+                    .await;
             }
 
             Err(other) => {
