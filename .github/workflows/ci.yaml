@@ -18,7 +18,7 @@ jobs:
         rust: [stable, nightly]
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: Install ${{ matrix.rust }}
       uses: dtolnay/rust-toolchain@master
       with:
@@ -42,7 +42,7 @@ jobs:
     name: Checking fmt, clippy, and docs
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: dtolnay/rust-toolchain@stable
       with:
         components: rustfmt, clippy
