@@ -14,7 +14,7 @@ jobs:
     name: build rustdocs and put them on github pages
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: dtolnay/rust-toolchain@nightly
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
