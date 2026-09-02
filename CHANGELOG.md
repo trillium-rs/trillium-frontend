@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.4](https://github.com/trillium-rs/trillium-frontend/compare/trillium-frontend-v0.4.3...trillium-frontend-v0.4.4) - 2026-09-02
+
+### Other
+
+- *(deps)* update actions/configure-pages action to v6
+- *(deps)* update rust crate fieldwork to v0.5.3
+- *(deps)* update actions/checkout action to v7
+- *(deps)* update actions/deploy-pages action to v5
+- *(deps)* update actions/upload-pages-artifact action to v5
+- *(deps)* update taiki-e/cache-cargo-install-action action to v3
+
 ## [0.4.3](https://github.com/trillium-rs/trillium-frontend/compare/trillium-frontend-v0.4.2...trillium-frontend-v0.4.3) - 2026-08-21
 
 ### Fixed
